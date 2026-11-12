@@ -1,0 +1,35 @@
+# Secrets — never commit
+.env
+secrets.json
+
+# Runtime data (database, logs, screenshots, tts cache live in %APPDATA%/Jarvis,
+# but ignore them here too in case JARVIS_HOME points inside the repo)
+jarvis_data/
+*.db
+*.db-wal
+*.db-shm
+logs/
+models/
+*.onnx
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# stray build artifacts
+*.whl
