@@ -120,3 +120,58 @@ async def test_unknown_tool_is_rejected():
     result = await registry.invoke("does_not_exist", {})
     assert result.ok is False
     assert "unknown tool" in result.message.lower()
+
+
+@pytest.mark.asyncio
+async def test_protected_path_is_refused_without_prompting(registry):
+    """Impossible destructive actions must fail fast, not ask the user first."""
+    result = await registry.invoke(
+        "delete_path", {"path": "C:\\Windows\\System32\\drivers\\etc\\hosts"})
+    assert result.ok is False
+    assert "protected" in result.message.lower()
+
+
+@pytest.mark.asyncio
+async def test_move_to_protected_path_is_refused(tmp_path, registry):
+    source = tmp_path / "thing.txt"
+    source.write_text("x")
+    result = await registry.invoke(
+        "move_path", {"source": str(source), "destination": "C:\\Program Files\\thing.txt"})
+    assert result.ok is False
+    assert "protected" in result.message.lower()
+    assert source.exists(), "source must not be touched"
+
+
+@pytest.mark.asyncio
+async def test_capability_gate_precedes_confirmation(registry):
+    """A disabled capability must short-circuit before any prompt is raised."""
+    from jarvis.core.permissions import permissions
+    settings = config.get()
+    original = settings.security.allow_shutdown
+    settings.security.allow_shutdown = False
+    try:
+        assert permissions.pending() == []
+        result = await registry.invoke("power_action", {"action": "restart"})
+        assert result.ok is False
+        assert permissions.pending() == [], "must not open a confirmation dialog"
+    finally:
+        settings.security.allow_shutdown = original
+
+
+@pytest.mark.asyncio
+async def test_confirmation_timeout_when_capability_enabled(registry):
+    """With power allowed, an unanswered prompt times out to 'no'."""
+    from jarvis.core.permissions import permissions
+    settings = config.get()
+    original_allow = settings.security.allow_shutdown
+    original_timeout = permissions.timeout
+    settings.security.allow_shutdown = True
+    permissions.timeout = 0.3
+    try:
+        result = await registry.invoke("power_action", {"action": "shutdown"})
+        assert result.ok is False
+        assert "cancelled" in result.message.lower() or "declined" in result.message.lower()
+        assert permissions.pending() == []
+    finally:
+        settings.security.allow_shutdown = original_allow
+        permissions.timeout = original_timeout

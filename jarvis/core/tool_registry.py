@@ -36,6 +36,9 @@ class ToolSpec:
     requires_confirmation: bool = False
     confirmation_template: str = ""        # e.g. "Delete {path}?"
     dangerous: bool = False
+    #: Optional fast validation run *before* asking for confirmation. Returns an
+    #: error message to abort with, or None when the call may proceed.
+    precheck: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
 
     def json_schema(self) -> Dict[str, Any]:
         return {
@@ -117,6 +120,17 @@ class ToolRegistry:
             bus.log(f"Blocked '{name}': {spec.capability} disabled", level="warning")
             return ActionResult(ok=False,
                                 message=f"Permission denied: {spec.capability} is disabled in settings.")
+
+        if spec.precheck is not None:
+            try:
+                problem = spec.precheck(arguments)
+            except Exception as exc:  # a broken precheck must not block the tool
+                log.warning("Precheck for %s failed: %s", name, exc)
+                problem = None
+            if problem:
+                audit_logger.record(name, arguments, BLOCKED, problem)
+                bus.log(problem, level="warning", source="tools")
+                return ActionResult(ok=False, message=problem)
 
         if spec.requires_confirmation and not skip_confirmation:
             description = (spec.confirmation_template or

@@ -234,7 +234,9 @@ async def set_startup(enabled: bool = True) -> Dict[str, Any]:
     config.save(settings)
     if not support.is_windows:
         return _ok({"enabled": enabled},
-                   "Startup entry saved, but automatic launch only applies on Windows.")
+                   ("Launch at login will be registered when JARVIS runs on Windows. "
+                    "Setting stored locally.")
+                   if enabled else "Launch at login disabled.")
     import subprocess
     from pathlib import Path as _Path
     script = _Path(__file__).resolve().parent.parent.parent / "scripts" / "start_jarvis.bat"

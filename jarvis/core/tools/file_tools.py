@@ -1,6 +1,7 @@
 """Filesystem tools. Destructive tools are confirmation-gated."""
 from __future__ import annotations
 
+from ... import config
 from ...computer import file_manager
 from ...computer.platform_support import NotSupported
 from ...database.models import ActionResult
@@ -24,6 +25,28 @@ def _wrap(fn, *args, **kwargs) -> ActionResult:
 
 
 _OBJ = {"type": "object"}
+
+
+def _path_precheck(*keys: str):
+    """Reject protected/unresolvable paths before any confirmation prompt."""
+    from ...security.command_validator import validator
+
+    def check(arguments):
+        extra = config.get().security.protected_paths
+        for key in keys:
+            value = arguments.get(key)
+            if not value:
+                continue
+            if validator.is_protected_path(str(value), extra):
+                return (f"Refused: '{value}' is a protected system location, "
+                        "so I will not modify it.")
+            try:
+                file_manager.resolve(str(value))
+            except (OSError, ValueError, RuntimeError):
+                return f"Refused: '{value}' is not a valid path."
+        return None
+
+    return check
 
 
 registry.register(ToolSpec(
@@ -120,6 +143,7 @@ registry.register(ToolSpec(
                 "required": ["path", "new_name"]},
     handler=lambda path, new_name: _wrap(file_manager.rename_path, path, new_name),
     category="files", capability=Capability.FILE_WRITE, risk="medium",
+    precheck=_path_precheck("path"),
 ))
 
 registry.register(ToolSpec(
@@ -131,6 +155,7 @@ registry.register(ToolSpec(
     handler=lambda source, destination: _wrap(file_manager.move_path, source, destination),
     category="files", capability=Capability.FILE_WRITE, risk="medium",
     requires_confirmation=True,
+    precheck=_path_precheck("source", "destination"),
     confirmation_template="Move '{source}' to '{destination}'?",
 ))
 
@@ -158,6 +183,7 @@ registry.register(ToolSpec(
     handler=lambda path, permanent=False: _wrap(file_manager.delete_path, path, permanent),
     category="files", capability=Capability.FILE_WRITE, risk="high",
     requires_confirmation=True, dangerous=True,
+    precheck=_path_precheck("path"),
     confirmation_template="Delete '{path}'? (permanent if you asked for permanent)"
 ))
 
