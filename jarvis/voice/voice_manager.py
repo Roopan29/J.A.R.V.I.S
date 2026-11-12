@@ -247,4 +247,6 @@ class VoiceManager:
         }
 
 
-voice_manager = VoiceManager()
+#: Application-wide voice orchestrator.  NOTE: deliberately not named
+#: ``voice_manager`` — that would shadow this module inside the package.
+manager = VoiceManager()

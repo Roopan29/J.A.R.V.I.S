@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from .. import __version__, config
 from ..automation import custom_commands, task_executor
-from ..automation.task_queue import task_queue
+from ..automation.task_queue import tasks as task_queue
 from ..computer import app_control, file_manager, powershell, screen_vision, system_control
 from ..computer.platform_support import NotSupported, support
 from ..core.ai_engine import ai_engine
@@ -26,7 +26,7 @@ from ..productivity import notes, reminders, timers
 from ..security.secrets import provider_status, set_secret
 from ..voice.speech_output import available_engines, speech
 from ..voice.speech_recognition import list_input_devices, list_output_devices
-from ..voice.voice_manager import voice_manager
+from ..voice.voice_manager import manager as voice_manager
 from .schemas import (CommandRequest, CustomCommandCreate, FileAction, LaunchRequest,
                       MemoryCreate, NoteCreate, NoteUpdate, PermissionResponse,
                       ReminderCreate, SettingsPatch, SpeakRequest, TodoCreate, ToolInvoke)

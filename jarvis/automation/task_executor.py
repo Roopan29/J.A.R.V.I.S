@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from ..core.ai_engine import ai_engine
 from ..core.tool_registry import registry
 from ..event_bus import bus
-from .task_queue import TaskContext, task_queue
+from .task_queue import TaskContext, tasks as task_queue
 
 log = logging.getLogger(__name__)
 

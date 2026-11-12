@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..database.models import ActionResult
 from ..event_bus import EventType, bus
-from ..security.audit_logger import audit_logger, BLOCKED, DENIED, ERROR, SUCCESS
+from ..security.audit_logger import auditor as audit_logger, BLOCKED, DENIED, ERROR, SUCCESS
 from .permissions import PermissionManager, permissions
 
 log = logging.getLogger(__name__)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ...automation import custom_commands, task_executor
-from ...automation.task_queue import task_queue
+from ...automation.task_queue import tasks as task_queue
 from ...database.models import ActionResult
 from ..tool_registry import ToolSpec, registry
 

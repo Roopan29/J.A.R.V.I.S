@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__, config
-from ..automation.task_queue import task_queue
+from ..automation.task_queue import tasks as task_queue
 from ..computer import system_control
 from ..core.conversation import conversation
 from ..core.permissions import permissions
@@ -23,7 +23,7 @@ from ..event_bus import EventType, bus
 from ..productivity.reminders import scheduler as reminder_scheduler
 from ..productivity.timers import timer_manager
 from ..voice.speech_output import speech
-from ..voice.voice_manager import voice_manager
+from ..voice.voice_manager import manager as voice_manager
 from . import routes
 
 log = logging.getLogger(__name__)

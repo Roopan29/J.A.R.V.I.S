@@ -50,4 +50,6 @@ class AuditLogger:
         return db.audit_entries(limit)
 
 
-audit_logger = AuditLogger()
+#: Application-wide audit trail. Named ``auditor`` so it does not
+#: shadow this module inside the package.
+auditor = AuditLogger()

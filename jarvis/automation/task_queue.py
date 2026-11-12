@@ -231,4 +231,5 @@ class TaskQueue:
         return self._running_task.public() if self._running_task else None
 
 
-task_queue = TaskQueue()
+#: Application-wide queue. Named ``tasks`` so it does not shadow this module.
+tasks = TaskQueue()

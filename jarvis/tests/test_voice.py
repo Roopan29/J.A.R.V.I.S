@@ -170,3 +170,106 @@ def test_router_reminder_time_parsing():
 def test_stop_intent():
     assert router.route("stop").name == "stop"
     assert router.route("emergency stop").name == "stop"
+
+
+# ---------------------------------------------------------------------------
+# Full voice-loop orchestration with a synthetic microphone
+# ---------------------------------------------------------------------------
+class _MicCapture:
+    level = 0.2
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def read(self, timeout=0.5):
+        return np.zeros(1280, dtype=np.int16)
+
+
+class _LoopRecognizer:
+    def __init__(self, *args, **kwargs):
+        self.detail = "fake"
+        self.load_error = ""
+
+    def load(self):
+        return True
+
+    def status(self):
+        return {"available": True, "model": "fake", "detail": "fake"}
+
+    def transcribe(self, audio, language=None):
+        return {"ok": True, "text": "what time is it", "language": "en", "duration": 1.0}
+
+    def capture_utterance(self, capture, max_seconds=12.0, initial_timeout=6.0):
+        from jarvis.voice.speech_recognition import Utterance
+        return Utterance(audio=np.zeros(16000, dtype=np.int16), duration=1.0, peak_level=900)
+
+
+class _LoopDetector:
+    def __init__(self, *args, **kwargs):
+        self.available = True
+        self.hits = 0
+
+    def process_frame(self, frame):
+        self.hits += 1
+        return {"detected": self.hits == 1, "scores": {}, "available": True}
+
+    def reset(self):
+        pass
+
+    def status(self):
+        return {"available": True, "phrase": "hey jarvis", "detail": "fake"}
+
+
+def test_voice_loop_wake_word_to_dispatch(monkeypatch):
+    """Wake word → greeting → transcription → conversation handler."""
+    import time
+
+    from jarvis import config
+    from jarvis.voice import voice_manager as vm_module
+    from jarvis.voice import speech_output
+
+    # A previous test may have blanked the greeting; guarantee one here.
+    monkeypatch.setattr(config.get().voice, "greeting",
+                        "Yes, sir. How may I assist you?")
+    monkeypatch.setattr(vm_module, "AudioCapture", _MicCapture)
+    monkeypatch.setattr(vm_module, "SpeechRecognizer", _LoopRecognizer)
+    monkeypatch.setattr(vm_module, "WakeWordDetector", _LoopDetector)
+    spoken = []
+    monkeypatch.setattr(speech_output.speech, "speak",
+                        lambda text, timeout=None: spoken.append(text) or True)
+
+    handled = []
+
+    class FakeConversation:
+        async def handle(self, text, speak=True, source="voice"):
+            handled.append((text, source))
+
+    manager = vm_module.VoiceManager()
+    manager.recognizer = _LoopRecognizer()
+    manager.attach_conversation(FakeConversation())
+
+    result = manager.start("wake")
+    assert result["ok"], result["message"]
+    try:
+        deadline = time.time() + 8
+        while time.time() < deadline and not handled:
+            time.sleep(0.1)
+    finally:
+        manager.stop()
+
+    assert handled == [("what time is it", "voice")]
+    assert any("Yes, sir" in line for line in spoken), spoken
+    assert manager.listening is False
+
+
+def test_voice_status_shape():
+    from jarvis.voice.voice_manager import VoiceManager
+    status = VoiceManager().status()
+    for key in ("mode", "listening", "state", "wake_word", "stt", "tts", "devices", "level"):
+        assert key in status

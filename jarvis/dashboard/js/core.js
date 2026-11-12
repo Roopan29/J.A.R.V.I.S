@@ -62,6 +62,7 @@
     page: "dashboard",
     settings: null,
     metrics: {},
+    responsesSeen: 0,
     handlers: {},
     onEvent(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); },
     emit(type, data) { (this.handlers[type] || []).forEach((fn) => { try { fn(data); } catch (e) { console.error(e); } }); },
@@ -87,15 +88,18 @@
     let pct = 0;
     const arc = $("#bootArc");
     const label = $("#bootPct");
+    const started = performance.now();
     const timer = setInterval(() => {
-      pct = Math.min(100, pct + Math.random() * 17 + 6);
+      const elapsed = performance.now() - started;
+      // reach 100% within ~1.1 s, but never stall below 88% while waiting
+      pct = Math.min(100, Math.max(pct + 9, (elapsed / 1100) * 100));
       label.textContent = Math.round(pct) + "%";
       arc.style.strokeDashoffset = String(553 - (553 * pct) / 100);
       if (pct >= 100) {
         clearInterval(timer);
-        setTimeout(() => $("#boot").classList.add("done"), 420);
+        setTimeout(() => $("#boot").classList.add("done"), 240);
       }
-    }, 210);
+    }, 70);
   }
 
   /* ---------------------------------------------------------- core rings */
@@ -308,6 +312,13 @@
   }
 
   /* ------------------------------------------------------------- commands */
+  function renderReply(reply) {
+    if (!reply || !reply.text) return;
+    const meta = [reply.provider, reply.model].filter(Boolean).join(" · ");
+    addMessage("assistant", reply.text, meta);
+    (reply.tool_calls || []).forEach((call) =>
+      addMessage("tool", `${call.ok === false ? "✕" : "✓"} ${call.name}`));
+  }
   async function sendCommand(text, speak = true) {
     text = (text || "").trim();
     if (!text) return;
@@ -315,14 +326,16 @@
     addLog({ message: "You: " + text, level: "info" });
     setState("thinking");
     try {
+      const before = App.responsesSeen;
       const result = await post("/command", { text, speak });
       const reply = (result && result.data) || {};
-      // Normally the WebSocket echo renders the reply; if the socket is down
-      // (or was reconnecting) fall back to the REST response so nothing is lost.
-      if (!App.socket || !App.socket.connected) {
-        if (reply.text) addMessage("assistant", reply.text);
-        (reply.tool_calls || []).forEach((call) =>
-          addMessage("tool", `${call.ok === false ? "✕" : "✓"} ${call.name}`));
+      // Normally the WebSocket echo renders the reply. If the event has not
+      // arrived (socket reconnecting, or a very fast REST response) render it
+      // from the REST payload so a reply is never silently lost.
+      const socketRendered = App.responsesSeen > before;
+      if (!socketRendered) {
+        if (reply.text) renderReply(reply);
+        if (App.socket && App.socket.connected) App.responsesSeen = before + 1;
       }
       setState("idle");
       return reply;
@@ -394,13 +407,8 @@
       toast(data.title || "Notification", data.message || "", data.level || "info");
     });
     socket.on("response", (data) => {
-      if (data && data.text) addMessage("assistant", data.text,
-        `${data.provider || ""} ${data.model ? "· " + data.model : ""}`.trim());
-      if (data && data.tool_calls && data.tool_calls.length) {
-        data.tool_calls.forEach((call) => {
-          addMessage("tool", `${call.ok === false ? "✕" : "✓"} ${call.name}`);
-        });
-      }
+      App.responsesSeen = (App.responsesSeen || 0) + 1;
+      renderReply(data);
       setState("idle");
       App.emit("response", data);
     });
