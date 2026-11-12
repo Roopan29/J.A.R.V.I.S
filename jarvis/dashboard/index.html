@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>J.A.R.V.I.S. — System Interface</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%2300e5ff' stroke-width='4'/><circle cx='50' cy='50' r='18' fill='%2300e5ff'/></svg>" />
+<link rel="stylesheet" href="/static/styles/main.css" />
+</head>
+<body data-theme="jarvis">
+<div id="boot" class="boot-screen">
+  <div class="boot-core">
+    <svg viewBox="0 0 200 200" class="boot-ring">
+      <circle cx="100" cy="100" r="88" class="ring-track"/>
+      <circle cx="100" cy="100" r="88" class="ring-fill" id="bootArc"/>
+    </svg>
+    <span class="boot-pct" id="bootPct">0%</span>
+  </div>
+  <div class="boot-lines" id="bootLines"></div>
+</div>
+
+<div class="scanlines" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"><i class="dot"></i></span>
+    <span class="brand-text">J.A.R.V.I.S.<small>JUST A RATHER VERY INTELLIGENT SYSTEM</small></span>
+  </div>
+  <nav class="nav" id="nav">
+    <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+    <button class="nav-btn" data-page="assistant">AI Assistant</button>
+    <button class="nav-btn" data-page="system">System Control</button>
+    <button class="nav-btn" data-page="applications">Applications</button>
+    <button class="nav-btn" data-page="files">File Manager</button>
+    <button class="nav-btn" data-page="automation">Automation</button>
+    <button class="nav-btn" data-page="memory">Memory</button>
+    <button class="nav-btn" data-page="settings">Settings</button>
+  </nav>
+  <div class="topbar-status">
+    <span class="pill" id="aiPill" title="AI provider status">AI · —</span>
+    <span class="pill" id="micPill" title="Microphone status">MIC · idle</span>
+    <span class="pill clock" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<main id="pages">
+  <!-- ================= DASHBOARD ================= -->
+  <section class="page active" id="page-dashboard">
+    <div class="grid-dashboard">
+      <aside class="panel left-panel">
+        <h2 class="panel-title">System Telemetry <span class="live-dot"></span></h2>
+        <div class="metric" data-metric="cpu">
+          <div class="metric-head"><span>CPU</span><b id="cpuVal">--%</b></div>
+          <div class="bar"><i id="cpuBar" style="width:0%"></i></div>
+          <div class="metric-sub" id="cpuSub">-- cores</div>
+        </div>
+        <div class="metric" data-metric="memory">
+          <div class="metric-head"><span>Memory</span><b id="memVal">--%</b></div>
+          <div class="bar"><i id="memBar" style="width:0%"></i></div>
+          <div class="metric-sub" id="memSub">-- / -- GB</div>
+        </div>
+        <div class="metric" data-metric="gpu">
+          <div class="metric-head"><span>GPU</span><b id="gpuVal">n/a</b></div>
+          <div class="bar"><i id="gpuBar" style="width:0%"></i></div>
+          <div class="metric-sub" id="gpuSub">no GPU telemetry</div>
+        </div>
+        <div class="metric" data-metric="battery">
+          <div class="metric-head"><span>Battery</span><b id="batVal">--%</b></div>
+          <div class="bar"><i id="batBar" style="width:0%"></i></div>
+          <div class="metric-sub" id="batSub">--</div>
+        </div>
+        <div class="metric" data-metric="disk">
+          <div class="metric-head"><span>Storage</span><b id="diskVal">--%</b></div>
+          <div class="bar"><i id="diskBar" style="width:0%"></i></div>
+          <div class="metric-sub" id="diskSub">--</div>
+        </div>
+        <div class="chip-row">
+          <div class="chip"><label>NETWORK</label><span id="netVal">—</span></div>
+          <div class="chip"><label>UPTIME</label><span id="uptimeVal">—</span></div>
+        </div>
+        <div class="chip-row">
+          <div class="chip"><label>HOST</label><span id="hostVal">—</span></div>
+          <div class="chip"><label>OS</label><span id="osVal">—</span></div>
+        </div>
+        <div class="per-core" id="perCore"></div>
+      </aside>
+
+      <section class="core-stage">
+        <div class="core-wrap" id="coreWrap">
+          <svg class="core-svg" viewBox="0 0 400 400" aria-hidden="true">
+            <defs>
+              <radialGradient id="coreGlow">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.55"/>
+                <stop offset="70%" stop-color="var(--accent)" stop-opacity="0.05"/>
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="sweepGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity="0"/>
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.65"/>
+              </linearGradient>
+            </defs>
+            <circle cx="200" cy="200" r="196" fill="url(#coreGlow)" opacity="0.5"/>
+            <g class="ring ring-outer">
+              <circle cx="200" cy="200" r="176" class="ring-line"/>
+              <circle cx="200" cy="200" r="176" class="ring-dash"/>
+            </g>
+            <g class="ring ring-ticks" id="tickRing"></g>
+            <g class="ring ring-mid">
+              <circle cx="200" cy="200" r="138" class="ring-line"/>
+              <path d="M200 62 A138 138 0 0 1 296 296" class="ring-arc"/>
+              <path d="M200 338 A138 138 0 0 1 104 104" class="ring-arc alt"/>
+            </g>
+            <g class="ring ring-sweep" id="sweep">
+              <path d="M200 200 L200 40 A160 160 0 0 1 313 87 Z" fill="url(#sweepGrad)" opacity="0.35"/>
+            </g>
+            <g class="ring ring-inner" id="innerRing">
+              <circle cx="200" cy="200" r="104" class="ring-dash slow"/>
+            </g>
+            <g id="waveform" class="waveform"></g>
+            <circle cx="200" cy="200" r="76" class="core-disc"/>
+            <circle cx="200" cy="200" r="76" class="core-pulse"/>
+            <g id="coreEye" class="core-eye">
+              <circle cx="200" cy="200" r="34" class="eye-outer"/>
+              <circle cx="200" cy="200" r="17" class="eye-inner"/>
+            </g>
+          </svg>
+          <div class="core-state" id="coreState">STANDBY</div>
+          <div class="core-meta" id="coreMeta">awaiting instruction</div>
+        </div>
+        <div class="core-actions">
+          <button class="btn btn-accent" id="btnMic" title="Push to talk">◉ Listen</button>
+          <button class="btn" id="btnWake" title="Toggle wake word listening">Wake word</button>
+          <button class="btn" id="btnStopSpeak" title="Stop speech">Stop speaking</button>
+          <button class="btn btn-danger" id="btnEmergency" title="Emergency stop">■ Emergency stop</button>
+        </div>
+        <div class="task-strip" id="taskStrip">
+          <span class="task-label">CURRENT TASK</span>
+          <div class="task-line"><div class="task-bar"><i id="taskBar" style="width:0%"></i></div>
+            <span id="taskText">idle</span></div>
+        </div>
+      </section>
+
+      <aside class="panel right-panel">
+        <h2 class="panel-title">Activity Log <button class="mini-btn" id="clearLog">clear</button></h2>
+        <div class="log-list" id="logList"></div>
+        <h2 class="panel-title mt">Notifications</h2>
+        <div class="notif-list" id="notifList"></div>
+      </aside>
+    </div>
+
+    <footer class="bottom-panel">
+      <div class="cmd-row">
+        <button class="icon-btn" id="btnMic2" title="Push to talk">🎙</button>
+        <input id="cmdInput" class="cmd-input" autocomplete="off"
+               placeholder="Speak or type a command — e.g. &quot;open Chrome and search Python tutorials&quot;" />
+        <button class="btn btn-accent" id="btnSend">Transmit</button>
+      </div>
+      <div class="cmd-meta">
+        <span id="wakeStatus">wake word: idle</span>
+        <span id="ttsStatus">voice: —</span>
+        <span id="permBanner" class="perm-banner hidden"></span>
+      </div>
+    </footer>
+  </section>
+
+  <!-- ================= ASSISTANT ================= -->
+  <section class="page" id="page-assistant">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">Conversation <button class="mini-btn" id="clearConv">reset</button></h2>
+        <div class="chat" id="chat"></div>
+        <div class="cmd-row compact">
+          <input id="chatInput" class="cmd-input" placeholder="Message JARVIS…" autocomplete="off"/>
+          <button class="btn btn-accent" id="chatSend">Send</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">AI Engine</h2>
+        <div class="kv" id="aiInfo"></div>
+        <h2 class="panel-title mt">Available Tools <span class="muted" id="toolCount"></span></h2>
+        <div class="tool-grid" id="toolGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SYSTEM ================= -->
+  <section class="page" id="page-system">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">Live Metrics <span class="live-dot"></span></h2>
+        <div class="kv" id="sysKv"></div>
+        <div class="per-core big" id="perCoreBig"></div>
+        <div class="btn-row">
+          <button class="btn" data-sys="lock">Lock PC</button>
+          <button class="btn" data-sys="taskmgr">Task Manager</button>
+          <button class="btn" data-sys="health">Health check</button>
+          <button class="btn" data-sys="screenshot">Screenshot</button>
+        </div>
+        <div class="vol-row">
+          <label>Volume</label><input type="range" id="volSlider" min="0" max="100" value="50"/>
+          <button class="btn small" id="volMute">Mute</button>
+        </div>
+        <div class="danger-row">
+          <span class="muted">Power actions require confirmation and are disabled by default.</span>
+          <button class="btn btn-danger small" data-power="restart">Restart</button>
+          <button class="btn btn-danger small" data-power="shutdown">Shut down</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">PowerShell <span class="muted">validated, never elevated</span></h2>
+        <textarea id="psInput" class="ps-input" rows="6"
+                  placeholder="Get-Process | Sort-Object CPU -Descending | Select-Object -First 5"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-accent" id="psRun">Run</button>
+          <span class="muted" id="psHint">Dangerous commands are blocked outright.</span>
+        </div>
+        <pre class="output" id="psOutput">Output will appear here.</pre>
+        <h2 class="panel-title mt">Processes</h2>
+        <div class="table-wrap"><table class="table" id="procTable">
+          <thead><tr><th>Process</th><th>CPU</th><th>Mem %</th></tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= APPLICATIONS ================= -->
+  <section class="page" id="page-applications">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">Installed Applications</h2>
+        <input class="cmd-input" id="appFilter" placeholder="Filter applications…"/>
+        <div class="app-grid" id="appGrid"></div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">Launch by name</h2>
+        <div class="cmd-row compact">
+          <input class="cmd-input" id="launchInput" placeholder="chrome, code, spotify, notepad…"/>
+          <button class="btn btn-accent" id="launchBtn">Launch</button>
+        </div>
+        <h2 class="panel-title mt">Running Processes</h2>
+        <div class="table-wrap"><table class="table" id="runTable">
+          <thead><tr><th>Process</th><th>Mem %</th><th></th></tr></thead><tbody></tbody>
+        </table></div>
+        <h2 class="panel-title mt">Windows</h2>
+        <div class="win-list" id="winList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FILES ================= -->
+  <section class="page" id="page-files">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">File Manager</h2>
+        <div class="cmd-row compact">
+          <button class="btn small" id="fsUp">↑ Up</button>
+          <input class="cmd-input" id="fsPath" value="~"/>
+          <button class="btn small" id="fsGo">Go</button>
+        </div>
+        <div class="table-wrap tall"><table class="table" id="fsTable">
+          <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">Operations</h2>
+        <div class="btn-row">
+          <button class="btn small" id="fsNewFolder">New folder</button>
+          <button class="btn small" id="fsNewFile">New file</button>
+          <button class="btn small" id="fsRename">Rename</button>
+          <button class="btn small btn-danger" id="fsDelete">Delete</button>
+        </div>
+        <h2 class="panel-title mt">Search</h2>
+        <div class="cmd-row compact">
+          <input class="cmd-input" id="fsQuery" placeholder="file name fragment…"/>
+          <button class="btn small" id="fsSearch">Search</button>
+        </div>
+        <div class="table-wrap" style="max-height:220px"><table class="table" id="fsResults">
+          <tbody></tbody></table></div>
+        <h2 class="panel-title mt">Maintenance</h2>
+        <div class="btn-row">
+          <button class="btn small" id="dupScan">Find duplicates</button>
+          <button class="btn small" id="organisePreview">Preview Downloads cleanup</button>
+        </div>
+        <pre class="output" id="fsOutput">Select a file to see details.</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AUTOMATION ================= -->
+  <section class="page" id="page-automation">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">Task Queue <button class="mini-btn" id="cancelTasks">cancel all</button></h2>
+        <div class="task-list" id="taskList"></div>
+        <h2 class="panel-title mt">Run a workflow</h2>
+        <div class="cmd-row compact">
+          <input class="cmd-input" id="goalInput"
+                 placeholder="prepare my laptop for programming"/>
+          <button class="btn small" id="planBtn">Plan</button>
+          <button class="btn btn-accent small" id="runBtn">Run</button>
+        </div>
+        <pre class="output" id="planOutput">Plans appear here before execution.</pre>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">Custom Commands</h2>
+        <div class="cmd-row compact">
+          <input class="cmd-input" id="ccTrigger" placeholder="trigger phrase, e.g. coding mode"/>
+          <button class="btn small" id="ccSave">Save</button>
+        </div>
+        <textarea id="ccSteps" class="ps-input" rows="5" spellcheck="false"
+          placeholder='[{"tool":"open_application","arguments":{"name":"code"}},
+ {"tool":"open_path","arguments":{"path":"C:/Users/me/projects"}}]'></textarea>
+        <div class="cc-list" id="ccList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MEMORY ================= -->
+  <section class="page" id="page-memory">
+    <div class="grid-two">
+      <div class="panel">
+        <h2 class="panel-title">Memory Store
+          <label class="switch"><input type="checkbox" id="memEnabled" checked/><span></span></label>
+          <button class="mini-btn" id="memClear">clear all</button>
+        </h2>
+        <div class="cmd-row compact">
+          <input class="cmd-input" id="memKey" placeholder="key (e.g. name)"/>
+          <input class="cmd-input" id="memValue" placeholder="value"/>
+          <button class="btn small" id="memAdd">Add</button>
+        </div>
+        <div class="table-wrap tall"><table class="table" id="memTable">
+          <thead><tr><th>Key</th><th>Value</th><th>Category</th><th></th></tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">Conversation History</h2>
+        <div class="chat small" id="historyChat"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section class="page" id="page-settings">
+    <div class="settings-grid">
+      <div class="panel">
+        <h2 class="panel-title">AI Provider</h2>
+        <label class="field">Provider
+          <select id="setProvider">
+            <option value="ollama">Ollama (local)</option>
+            <option value="openai">OpenAI-compatible</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="none">None (commands only)</option>
+          </select>
+        </label>
+        <label class="field">Model <input id="setModel" class="cmd-input"/></label>
+        <label class="field">Temperature <input id="setTemp" type="number" step="0.1" min="0" max="2"/></label>
+        <label class="field">Context turns <input id="setCtx" type="number" min="1" max="50"/></label>
+        <div class="btn-row">
+          <button class="btn small" id="aiCheck">Check connection</button>
+          <button class="btn small" id="aiModels">List models</button>
+        </div>
+        <pre class="output" id="aiOutput">—</pre>
+        <label class="field">API key (stored securely, never in config)
+          <input id="setKey" class="cmd-input" type="password" placeholder="sk-…"/>
+        </label>
+        <button class="btn small" id="saveKey">Store key</button>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">Voice Input</h2>
+        <label class="field">Microphone
+          <select id="setMic"></select>
+        </label>
+        <label class="field">Whisper model
+          <select id="setWhisper">
+            <option>tiny</option><option>base</option><option>small</option>
+            <option>medium</option><option>large-v3</option>
+          </select>
+        </label>
+        <label class="field">Wake word phrase
+          <input id="setWake" class="cmd-input"/>
+        </label>
+        <label class="check"><input type="checkbox" id="setWakeEnabled"/> Enable wake word</label>
+        <label class="check"><input type="checkbox" id="setStartListen"/> Listen on startup</label>
+        <label class="field">Greeting <input id="setGreeting" class="cmd-input"/></label>
+        <button class="btn small" id="voiceTestBtn">Run microphone test</button>
+        <pre class="output" id="voiceOutput">—</pre>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">Speech Output</h2>
+        <label class="field">Engine
+          <select id="setEngine">
+            <option value="auto">Auto (Piper → SAPI)</option>
+            <option value="piper">Piper</option>
+            <option value="sapi">SAPI5</option>
+          </select>
+        </label>
+        <label class="field">Piper voice <input id="setVoice" class="cmd-input"/></label>
+        <label class="field">Rate <input id="setRate" type="range" min="0.5" max="2" step="0.05"/></label>
+        <label class="field">Volume <input id="setVolume" type="range" min="0" max="1" step="0.05"/></label>
+        <button class="btn small" id="speakTest">Test voice</button>
+        <h2 class="panel-title mt">Appearance</h2>
+        <label class="field">Accent
+          <input id="setAccent" type="color"/>
+        </label>
+        <label class="check"><input type="checkbox" id="setAnim"/> Animations</label>
+        <label class="check"><input type="checkbox" id="setScan"/> Scan lines</label>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">Security &amp; Permissions</h2>
+        <label class="check"><input type="checkbox" id="secConfirm"/> Confirm destructive actions</label>
+        <label class="check"><input type="checkbox" id="secPs"/> Allow PowerShell</label>
+        <label class="check"><input type="checkbox" id="secScreen"/> Allow screen capture</label>
+        <label class="check"><input type="checkbox" id="secWrite"/> Allow file writes</label>
+        <label class="check"><input type="checkbox" id="secApps"/> Allow app launching</label>
+        <label class="check"><input type="checkbox" id="secPower"/> Allow shutdown / restart</label>
+        <label class="check"><input type="checkbox" id="secStartup"/> Launch JARVIS at Windows login</label>
+        <div class="btn-row">
+          <button class="btn btn-accent small" id="saveSettings">Save all settings</button>
+          <button class="btn small" id="resetSettings">Reset</button>
+        </div>
+        <h2 class="panel-title mt">Audit Log</h2>
+        <div class="table-wrap" style="max-height:180px"><table class="table" id="auditTable">
+          <thead><tr><th>Time</th><th>Tool</th><th>Outcome</th></tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toasts" id="toasts"></div>
+
+<div class="modal hidden" id="permModal">
+  <div class="modal-card">
+    <h3 id="permTitle">Confirmation required</h3>
+    <p id="permText"></p>
+    <div class="modal-actions">
+      <button class="btn" id="permDeny">Deny</button>
+      <button class="btn btn-accent" id="permAllow">Approve</button>
+    </div>
+    <label class="check small"><input type="checkbox" id="permRemember"/> Don't ask again this session</label>
+  </div>
+</div>
+
+<div class="boot-tip" id="bootTip">press F11 for full screen · Ctrl+Shift+M to talk · Ctrl+Shift+X emergency stop</div>
+
+<div class="modal hidden" id="promptModal">
+  <div class="modal-card">
+    <h3 id="promptTitle">Input</h3>
+    <input class="cmd-input" id="promptInput"/>
+    <div class="modal-actions">
+      <button class="btn" id="promptCancel">Cancel</button>
+      <button class="btn btn-accent" id="promptOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/pages.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------------------
+# PROJECT J.A.R.V.I.S. — runtime dependencies
+# Install with:  scripts\install.bat   (creates .venv and pip-installs this file)
+# Tested with Python 3.10 – 3.12 on Windows 10/11.
+# ---------------------------------------------------------------------------
+
+# --- Core backend / dashboard server -------------------------------------
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27
+websockets>=12.0
+python-multipart>=0.0.9
+python-dotenv>=1.0
+
+# --- System monitoring (real metrics, never simulated) --------------------
+psutil>=5.9
+nvidia-ml-py>=12.535   # optional at runtime; used only if an NVIDIA GPU exists
+
+# --- HTTP client for AI providers + web intelligence ----------------------
+httpx>=0.26
+
+# --- Voice input ----------------------------------------------------------
+sounddevice>=0.4.6
+numpy>=1.24,<2.3
+faster-whisper>=1.0.0
+openwakeword>=0.6.0
+webrtcvad-wheels>=2.0.14 ; sys_platform == "win32"   # optional, improves VAD
+scipy>=1.10            # resampling helpers for the audio pipeline
+
+# --- Voice output ---------------------------------------------------------
+piper-tts>=1.2.0 ; sys_platform == "win32"
+pyttsx3>=2.90          # SAPI5 fallback voice on Windows, espeak elsewhere
+soundfile>=0.12
+
+# --- Windows computer control (guarded imports in the code) ---------------
+pywin32>=306 ; sys_platform == "win32"
+pycaw>=20240210 ; sys_platform == "win32"   # precise system volume via Core Audio
+comtypes>=1.2 ; sys_platform == "win32"     # required by pycaw
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+send2trash>=1.8.2      # recoverable deletes via the Recycle Bin
+pygetwindow>=0.0.9 ; sys_platform == "win32"
+mss>=9.0
+Pillow>=10.0
+pytesseract>=0.3.10    # optional OCR engine wrapper (needs Tesseract installed)
+
+# --- Web intelligence -----------------------------------------------------
+beautifulsoup4>=4.12
+lxml>=5.0
+# duckduckgo-search (the 'ddgs' package) is optional: the built-in DuckDuckGo
+# HTML scraper needs no key and no extra dependency.
+
+# --- Developer / test -----------------------------------------------------
+pytest>=8.0
+pytest-asyncio>=0.23
+
+# --- Optional: native desktop window --------------------------------------
+# Install separately if you want JARVIS in a window instead of a browser tab:
+#   pip install pywebview
+# (requires the Microsoft Edge WebView2 runtime, preinstalled on Windows 11)
