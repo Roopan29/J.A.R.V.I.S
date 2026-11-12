@@ -33,3 +33,4 @@ Thumbs.db
 
 # stray build artifacts
 *.whl
+.ruff_cache/

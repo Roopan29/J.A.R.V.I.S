@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 from urllib.parse import urljoin, urlparse
@@ -117,11 +118,17 @@ def _duckduckgo(query: str, count: int) -> List[SearchResult]:
 
 
 def _duckduckgo_package(query: str, count: int) -> List[SearchResult]:
-    """Optional: use the duckduckgo_search package if installed."""
-    try:
-        from duckduckgo_search import DDGS  # type: ignore
+    """Optional: use the ddgs / duckduckgo_search package if installed."""
+    DDGS = None
+    try:  # the package was renamed; prefer the new name
+        from ddgs import DDGS  # type: ignore
     except ImportError:
-        return []
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                from duckduckgo_search import DDGS  # type: ignore
+        except ImportError:
+            return []
     try:
         with DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=count))
@@ -230,7 +237,7 @@ def research(query: str, depth: int = 3) -> Dict[str, Any]:
         "ok": bool(usable),
         "verified": bool(usable),
         "message": (f"Researched '{query}' across {len(usable)} source(s): {domains}."
-                    if usable else f"Search returned results but the pages could not be read."),
+                    if usable else "Search returned results but the pages could not be read."),
         "data": {"query": query, "sources": sources},
     }
 

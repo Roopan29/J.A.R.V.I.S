@@ -91,7 +91,7 @@ jarvis/
   api/                 FastAPI server: REST + WebSocket, background metrics/health
   desktop/             Optional native window host (pywebview / WebView2)
   dashboard/           The cinematic UI (HTML/CSS/JS, no build step)
-  tests/               104 automated tests
+  tests/               119 automated tests
 scripts/               Windows install/launch scripts
 ```
 
@@ -284,7 +284,7 @@ Verified by the automated suite and manual testing in this repository.
 - ✅ Emergency stop: stops listening, stops speech, cancels tasks, denies pending approvals
 - ✅ Proactive alerts: low battery, high CPU/RAM, low disk (rate-limited)
 - ✅ Install scripts, self-test, diagnostics, launch-at-login (opt-in)
-- ✅ 104 automated tests
+- ✅ 119 automated tests
 
 ---
 
@@ -388,7 +388,7 @@ Run with `--debug` for verbose logging, and `--diagnose` for a capability report
 ## 11. Development
 
 ```bat
-.venv\Scripts\python -m pytest jarvis\tests -v     :: 104 tests
+.venv\Scripts\python -m pytest jarvis\tests -v     :: 119 tests
 .venv\Scripts\python -m jarvis.main --diagnose     :: capability report
 .venv\Scripts\python -m jarvis.main --debug        :: verbose logs
 ```
