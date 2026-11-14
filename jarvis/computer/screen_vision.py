@@ -23,10 +23,17 @@ SHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _check_permission() -> None:
-    if not config.get().security.allow_screen_capture:
+    """Refuse unless screen capture is allowed.
+
+    Asks the permission layer rather than the raw setting so an approved
+    one-time grant ("take a screenshot" -> Allow?) is honoured without
+    permanently switching the setting on.
+    """
+    from ..core.permissions import permissions as _permissions
+    if not _permissions.check_capability("allow_screen_capture"):
         raise NotSupported(
             "Screen capture is disabled. Enable 'Allow screen capture' in "
-            "Settings → Security first."
+            "Settings → Security, or approve the prompt when asked."
         )
 
 

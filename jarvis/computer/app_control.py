@@ -61,10 +61,17 @@ APP_ALIASES: Dict[str, Dict[str, str]] = {
 
 #: A few apps worth searching the Start Menu for by friendly name.
 FRIENDLY_NAMES = {
+    # Browsers are what people actually say out loud.
+    "google chrome": "chrome", "chrome browser": "chrome", "chrome.": "chrome",
+    "microsoft edge": "msedge", "ms edge": "msedge", "edge": "msedge",
+    "mozilla firefox": "firefox", "internet explorer": "msedge",
+    "brave browser": "brave", "opera": "chrome",
     "visual studio code": "code", "vs code": "code", "word": "winword",
     "excel": "excel", "powerpoint": "powerpnt", "file explorer": "explorer",
     "task manager": "taskmgr", "settings": "settings", "terminal": "wt",
     "command prompt": "cmd", "calculator": "calc", "paint": "mspaint",
+    "windows terminal": "wt", "notepad++": "notepad", "media player": "vlc",
+    "task manager": "taskmgr", "control panel": "control",
 }
 
 
@@ -90,6 +97,77 @@ def _start_menu_shortcuts() -> Dict[str, Path]:
         for lnk in root.rglob("*.lnk"):
             shortcuts.setdefault(lnk.stem.lower(), lnk)
     return shortcuts
+
+
+def _app_paths() -> Dict[str, Path]:
+    """Read the Windows "App Paths" registry: authoritative exe locations.
+
+    Chrome, Edge and most installers register here, but not on PATH - which is
+    why "open chrome" failed with "no such file or directory: 'chrome'".
+    """
+    if not support.is_windows:
+        return {}
+    found: Dict[str, Path] = {}
+    try:
+        import winreg  # type: ignore
+    except ImportError:
+        return found
+    roots = [
+        (winreg.HKEY_LOCAL_MACHINE,
+         r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+        (winreg.HKEY_CURRENT_USER,
+         r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+        (winreg.HKEY_LOCAL_MACHINE,
+         r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths"),
+    ]
+    for hive, subkey in roots:
+        try:
+            with winreg.OpenKey(hive, subkey) as root:
+                for index in range(winreg.QueryInfoKey(root)[0]):
+                    try:
+                        name = winreg.EnumKey(root, index)
+                        with winreg.OpenKey(root, name) as entry:
+                            raw, _ = winreg.QueryValueEx(entry, "")
+                    except OSError:
+                        continue
+                    path = Path(str(raw).strip('"'))
+                    if path.is_file():
+                        # "chrome.exe" -> "chrome"
+                        found.setdefault(path.stem.lower(), path)
+                        found.setdefault(name.lower(), path)
+        except OSError:
+            continue
+    return found
+
+
+def _known_install_locations(name: str) -> List[Path]:
+    """Common absolute install paths, checked when the registry has no entry."""
+    if not support.is_windows:
+        return []
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    pf = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    pf86 = Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+    candidates = {
+        "chrome": [local / "Google/Chrome/Application/chrome.exe",
+                   pf / "Google/Chrome/Application/chrome.exe",
+                   pf86 / "Google/Chrome/Application/chrome.exe"],
+        "msedge": [pf86 / "Microsoft/Edge/Application/msedge.exe",
+                   pf / "Microsoft/Edge/Application/msedge.exe"],
+        "firefox": [pf / "Mozilla Firefox/firefox.exe",
+                    pf86 / "Mozilla Firefox/firefox.exe"],
+        "brave": [local / "BraveSoftware/Brave-Browser/Application/brave.exe",
+                  pf / "BraveSoftware/Brave-Browser/Application/brave.exe"],
+        "code": [local / "Programs/Microsoft VS Code/Code.exe",
+                 pf / "Microsoft VS Code/Code.exe"],
+        "spotify": [local / "Microsoft/WindowsApps/Spotify.exe",
+                    Path(os.environ.get("APPDATA", "")) / "Spotify/Spotify.exe"],
+        "discord": [local / "Discord/Update.exe"],
+        "vlc": [pf / "VideoLAN/VLC/vlc.exe", pf86 / "VideoLAN/VLC/vlc.exe"],
+        "steam": [pf86 / "Steam/steam.exe", pf / "Steam/steam.exe"],
+        "obs": [pf / "obs-studio/bin/64bit/obs64.exe",
+                pf86 / "obs-studio/bin/64bit/obs64.exe"],
+    }
+    return [path for path in candidates.get(name.lower(), []) if path.is_file()]
 
 
 def installed_apps() -> List[str]:
@@ -160,15 +238,39 @@ def open_application(name: str, arguments: Optional[str] = None,
     launched = False
     errors: List[str] = []
 
+    args = arguments.split() if arguments else []
+
     # 1. executable on PATH
     exe = spec.get("exe")
     if support.is_windows and exe:
         resolved = shutil.which(exe)
         if resolved:
             try:
-                subprocess.Popen([resolved, *(arguments.split() if arguments else [])],
+                subprocess.Popen([resolved, *args],
                                  creationflags=CREATE_NO_WINDOW, close_fds=True)
                 launched = True
+            except OSError as exc:
+                errors.append(str(exc))
+
+    # 1b. Windows "App Paths" registry (where Chrome/Edge actually register)
+    if not launched and support.is_windows:
+        registered = _app_paths().get(alias) or (exe and _app_paths().get(exe.lower()))
+        if registered:
+            try:
+                subprocess.Popen([str(registered), *args],
+                                 creationflags=CREATE_NO_WINDOW, close_fds=True)
+                launched = True
+            except OSError as exc:
+                errors.append(str(exc))
+
+    # 1c. well-known install directories
+    if not launched and support.is_windows:
+        for candidate in _known_install_locations(alias):
+            try:
+                subprocess.Popen([str(candidate), *args],
+                                 creationflags=CREATE_NO_WINDOW, close_fds=True)
+                launched = True
+                break
             except OSError as exc:
                 errors.append(str(exc))
 

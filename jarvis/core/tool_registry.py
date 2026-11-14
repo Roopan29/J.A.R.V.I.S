@@ -11,6 +11,7 @@ import inspect
 import json
 import logging
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -114,12 +115,37 @@ class ToolRegistry:
         if spec is None:
             return ActionResult(ok=False, message=f"Unknown tool '{name}'.")
 
+        grant = False
         if spec.capability and not self.permissions.check_capability(spec.capability):
-            audit_logger.record(name, arguments, BLOCKED,
-                                f"Capability '{spec.capability}' disabled")
-            bus.log(f"Blocked '{name}': {spec.capability} disabled", level="warning")
-            return ActionResult(ok=False,
-                                message=f"Permission denied: {spec.capability} is disabled in settings.")
+            # The capability is switched off, but the user explicitly asked for
+            # this action. Rather than dead-ending, offer a one-time approval so
+            # "take a screenshot" works without hunting through Settings.
+            label = _CAPABILITY_LABELS.get(spec.capability, spec.capability)
+            approved = await self.permissions.request(
+                action=f"enable:{spec.capability}",
+                description=f"Allow '{label}' for this action? "
+                            f"({spec.description or name})",
+                tool=name, risk="high", arguments=arguments,
+            )
+            if not approved:
+                audit_logger.record(name, arguments, BLOCKED,
+                                    f"Capability '{spec.capability}' denied by user")
+                bus.log(f"Blocked '{name}': {spec.capability} denied", level="warning")
+                return ActionResult(
+                    ok=False,
+                    message=(f"Permission denied: '{label}' is off. "
+                             f"Enable it in Settings → Security, or say yes when asked."))
+            # Grant just this one call; the setting itself is unchanged. The
+            # user has already answered "yes" for this action, so it must not
+            # immediately be asked about again by the tool's own confirmation.
+            grant = True
+            audit_logger.record(name, arguments, "approved",
+                                f"One-time grant for '{spec.capability}'")
+            bus.log(f"One-time permission granted for '{label}'", level="warning")
+
+        if grant:
+            # Already authorised by the one-time approval above.
+            skip_confirmation = True
 
         if spec.precheck is not None:
             try:
@@ -155,9 +181,15 @@ class ToolRegistry:
             handler = spec.handler
             if handler is None:
                 raise RuntimeError(f"Tool '{name}' has no handler")
-            result = handler(**arguments) if not _accepts_extra(handler) else handler(arguments)
-            if inspect.isawaitable(result):
-                result = await result
+            # A one-time grant must reach the tool's own capability guard,
+            # otherwise power_action etc. would refuse the action the user
+            # just approved. The setting itself stays off.
+            scope = (self.permissions.one_time_grant(spec.capability)
+                     if grant else nullcontext())
+            with scope:
+                result = handler(**arguments) if not _accepts_extra(handler) else handler(arguments)
+                if inspect.isawaitable(result):
+                    result = await result
             if isinstance(result, ActionResult):
                 action_result = result
             elif isinstance(result, dict):
@@ -204,6 +236,19 @@ def _accepts_extra(handler: Handler) -> bool:
     if len(params) == 1 and params[0].name in {"args", "arguments", "kwargs", "payload"}:
         return True
     return False
+
+
+#: Human-readable names for capability prompts.
+_CAPABILITY_LABELS = {
+    "allow_screen_capture": "screen capture",
+    "allow_powershell": "PowerShell commands",
+    "allow_app_launch": "launching applications",
+    "allow_file_write": "writing files",
+    "allow_shutdown": "shutdown and restart",
+    "allow_clipboard": "clipboard access",
+    "allow_input_control": "mouse and keyboard control",
+    "allow_network": "network access",
+}
 
 
 #: Application-wide registry, populated by core.tools setup.

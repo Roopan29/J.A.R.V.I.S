@@ -38,9 +38,28 @@ async def test_disabled_capability_blocks_tool():
             handler=lambda: ActionResult(ok=True, message="should not run"),
             capability=Capability.SCREEN_CAPTURE,
         ))
+        # A disabled capability now offers a single-action approval instead of
+        # dead-ending, so answer "no" and assert the tool never ran.
+        manager = registry.permissions
+        original_timeout = manager.timeout
+        manager.timeout = 5
+
+        async def deny_soon():
+            for _ in range(100):
+                pending = manager.pending()
+                if pending:
+                    manager.resolve(pending[0]["id"], False)
+                    return
+                await asyncio.sleep(0.01)
+
+        deny = asyncio.create_task(deny_soon())
         result = await registry.invoke("needs_screen", {})
+        await deny
+        manager.timeout = original_timeout
+
         assert result.ok is False
-        assert "disabled" in result.message.lower() or "denied" in result.message.lower()
+        assert "denied" in result.message.lower()
+        assert "screen capture" in result.message.lower()
     finally:
         settings.security.allow_screen_capture = original
 
@@ -143,18 +162,44 @@ async def test_move_to_protected_path_is_refused(tmp_path, registry):
 
 
 @pytest.mark.asyncio
-async def test_capability_gate_precedes_confirmation(registry):
-    """A disabled capability must short-circuit before any prompt is raised."""
+async def test_capability_gate_offers_one_time_approval(registry):
+    """A disabled capability asks for a one-time grant instead of dead-ending.
+
+    Regression guard: "take a screenshot" used to fail with a bare
+    "Permission denied" and no way forward from the dashboard.
+    """
     from jarvis.core.permissions import permissions
     settings = config.get()
     original = settings.security.allow_shutdown
+    original_timeout = permissions.timeout
     settings.security.allow_shutdown = False
+    permissions.timeout = 5
+    seen: list = []
+
+    async def approve_soon():
+        for _ in range(200):
+            pending = permissions.pending()
+            if pending:
+                seen.extend(pending)
+                permissions.resolve(pending[0]["id"], True)
+                return
+            await asyncio.sleep(0.01)
+
+    approver = asyncio.create_task(approve_soon())
     try:
-        assert permissions.pending() == []
         result = await registry.invoke("power_action", {"action": "restart"})
-        assert result.ok is False
-        assert permissions.pending() == [], "must not open a confirmation dialog"
+        await approver
+        assert seen, "a confirmation must be offered for a disabled capability"
+        assert seen[0]["action"] == "enable:allow_shutdown"
+        # Approved once, but the setting itself must remain off.
+        assert settings.security.allow_shutdown is False
+        # Crucially the one-time grant must get *past* the capability gate: on
+        # this host the next barrier is the Windows-only check, not permission.
+        message = str(result.message).lower()
+        assert "disabled in settings" not in message
+        assert "requires windows" in message or result.ok is True
     finally:
+        permissions.timeout = original_timeout
         settings.security.allow_shutdown = original
 
 

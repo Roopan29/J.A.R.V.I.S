@@ -15,6 +15,7 @@ import asyncio
 import logging
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -69,9 +70,29 @@ class PermissionManager:
         self._pending: Dict[str, PermissionRequest] = {}
         self._auto_approve: bool = False       # "don't ask again" for this session only
         self._listeners: List[Callable[[PermissionRequest], Any]] = []
+        self._grants: List[str] = []
 
     # -- capabilities -----------------------------------------------------
+    @contextmanager
+    def one_time_grant(self, capability: str):
+        """Allow ``capability`` for the duration of the block only.
+
+        Used after the user approves a disabled capability for a single action:
+        the setting stays off, but the tool's own guard must not refuse the very
+        action they just authorised.
+        """
+        self._grants.append(capability)
+        try:
+            yield
+        finally:
+            try:
+                self._grants.remove(capability)
+            except ValueError:
+                pass
+
     def check_capability(self, capability: str) -> bool:
+        if capability and capability in self._grants:
+            return True
         if not capability:
             return True
         settings = config.get().security

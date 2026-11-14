@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 
-from .. import config
 from .platform_support import NotSupported, support
 
 log = logging.getLogger(__name__)
@@ -346,7 +345,10 @@ def lock_workstation() -> Dict[str, Any]:
 def power_action(action: str) -> Dict[str, Any]:
     """Shutdown / restart / sleep / hibernate. Caller must confirm first."""
     action = (action or "").lower()
-    if not config.get().security.allow_shutdown:
+    # Ask the permission layer rather than the raw setting, so an approved
+    # one-time grant is honoured while the setting itself stays off.
+    from ..core.permissions import permissions as _permissions
+    if not _permissions.check_capability("allow_shutdown"):
         raise NotSupported("Power actions are disabled in Settings → Security.")
     support.require_windows("Power actions")
     flags = {"shutdown": ["/s", "/t", "30"], "restart": ["/r", "/t", "30"],

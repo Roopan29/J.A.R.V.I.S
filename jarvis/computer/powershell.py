@@ -34,7 +34,10 @@ def run(command: str, timeout: int = DEFAULT_TIMEOUT,
         elevated: bool = False) -> Dict[str, Any]:
     """Execute a validated PowerShell command and capture its output."""
     settings = config.get().security
-    validation = validator.validate_powershell(command, allow_powershell=settings.allow_powershell)
+    # Honour a one-time grant without changing the persisted setting.
+    from ..core.permissions import permissions as _permissions
+    allow = settings.allow_powershell or _permissions.check_capability("allow_powershell")
+    validation = validator.validate_powershell(command, allow_powershell=allow)
     if not validation.allowed:
         log.warning("Blocked PowerShell command: %s", validation.reasons)
         return {"ok": False, "blocked": True,

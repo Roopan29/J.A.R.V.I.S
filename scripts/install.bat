@@ -55,8 +55,17 @@ if errorlevel 1 (
     echo        JARVIS will run, but voice input will be unavailable.
     echo        Fix: install Python 3.11 or 3.12 and re-run scripts\install.bat
 )
-%VPY% -m pip install openwakeword --no-deps
-if errorlevel 1 echo [WARN] openWakeWord unavailable - push-to-talk still works.
+REM openWakeWord imports tqdm/scipy/scikit-learn/onnxruntime/requests at run
+REM time. Installing it with --no-deps left it broken ("Wake word unavailable"
+REM on the dashboard even though pip reported success), so install real deps.
+%VPY% -m pip install openwakeword
+if errorlevel 1 (
+    echo [WARN] openWakeWord unavailable - push-to-talk still works.
+    echo        Install it later with: .venv\Scripts\python -m pip install openwakeword
+)
+REM First-run model download (about 2 MB); harmless if it fails - retried on use.
+%VPY% -c "import openwakeword.utils as u; u.download_models(model_names=['hey_jarvis'])" 2>nul
+if errorlevel 1 echo [INFO] Wake-word model will download on first use (needs internet).
 %VPY% -m pip install webrtcvad-wheels
 if errorlevel 1 echo [INFO] webrtcvad not available - using the built-in energy VAD.
 
@@ -85,7 +94,7 @@ echo [..] Verifying installation ...
 %VPY% -c "import sounddevice; print('    audio input: OK')" 2>nul || echo    audio input: NOT AVAILABLE
 %VPY% -c "import pyttsx3; print('    SAPI5 speech: OK')" 2>nul || echo    SAPI5 speech: NOT AVAILABLE
 %VPY% -c "import faster_whisper; print('    faster-whisper: OK')" 2>nul || echo    faster-whisper: NOT AVAILABLE
-%VPY% -c "import openwakeword; print('    openwakeword: OK')" 2>nul || echo    openwakeword: NOT AVAILABLE
+%VPY% -c "import openwakeword, tqdm, scipy, sklearn, onnxruntime; print('    wake word (openWakeWord): OK')" 2>nul || echo    wake word (openWakeWord): NOT AVAILABLE - push-to-talk still works
 %VPY% -c "import pyautogui; print('    input automation: OK')" 2>nul || echo    input automation: NOT AVAILABLE
 %VPY% -c "import win32gui; print('    window control: OK')" 2>nul || echo    window control: NOT AVAILABLE
 
