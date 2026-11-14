@@ -152,3 +152,65 @@ def test_system_status_message_is_truthful(registry):
     assert data["disk"], "at least one volume should be reported"
     if data["battery"]["available"]:
         assert 0 <= data["battery"]["percent"] <= 100
+
+
+# -- Windows app resolution -------------------------------------------------
+# "open chrome" failed in the field because Chrome is not on PATH. These tests
+# pin the fallbacks that make it work, using a fake winreg and fake filesystem.
+
+
+def test_app_paths_reads_windows_registry(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    from jarvis.computer import app_control, platform_support
+
+    exe = tmp_path / "chrome.exe"
+    exe.write_bytes(b"MZ")
+
+    class FakeKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    fake_winreg = types.SimpleNamespace(
+        HKEY_LOCAL_MACHINE=1, HKEY_CURRENT_USER=2,
+        OpenKey=lambda hive, sub: FakeKey(),
+        QueryInfoKey=lambda key: (1, 0, 0),
+        EnumKey=lambda key, index: "chrome.exe",
+        QueryValueEx=lambda key, name: (str(exe), 1),
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake_winreg)
+    monkeypatch.setattr(platform_support.support, "is_windows", True)
+
+    found = app_control._app_paths()
+    assert found.get("chrome") == exe
+    assert found.get("chrome.exe") == exe
+
+
+def test_known_install_locations_finds_chrome(monkeypatch, tmp_path):
+    from jarvis.computer import app_control, platform_support
+
+    exe = tmp_path / "Google/Chrome/Application/chrome.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"MZ")
+
+    monkeypatch.setattr(platform_support.support, "is_windows", True)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("PROGRAMFILES", str(tmp_path / "pf"))
+    monkeypatch.setenv("PROGRAMFILES(X86)", str(tmp_path / "pf86"))
+
+    assert exe in app_control._known_install_locations("chrome")
+    assert app_control._known_install_locations("chrome")
+
+
+def test_spoken_browser_names_resolve_to_aliases():
+    from jarvis.computer.app_control import _resolve_alias
+
+    assert _resolve_alias("Google Chrome") == "chrome"
+    assert _resolve_alias("chrome browser") == "chrome"
+    assert _resolve_alias("Microsoft Edge") == "msedge"
+    assert _resolve_alias("ms edge") == "msedge"
+    assert _resolve_alias("windows terminal") == "wt"
