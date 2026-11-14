@@ -27,6 +27,36 @@ class Intent:
     notes: str = ""
 
 
+#: Sites people name without a domain. "open youtube" must work with no AI
+#: model running, since it used to fall through and produce no reply at all.
+_SITE_URLS = {
+    "youtube": "https://www.youtube.com",
+    "google": "https://www.google.com",
+    "gmail": "https://mail.google.com",
+    "google mail": "https://mail.google.com",
+    "google maps": "https://maps.google.com",
+    "google drive": "https://drive.google.com",
+    "google docs": "https://docs.google.com",
+    "chatgpt": "https://chatgpt.com",
+    "github": "https://github.com",
+    "stack overflow": "https://stackoverflow.com",
+    "stackoverflow": "https://stackoverflow.com",
+    "reddit": "https://www.reddit.com",
+    "twitter": "https://x.com",
+    "facebook": "https://www.facebook.com",
+    "instagram": "https://www.instagram.com",
+    "linkedin": "https://www.linkedin.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "netflix": "https://www.netflix.com",
+    "amazon": "https://www.amazon.in",
+    "flipkart": "https://www.flipkart.com",
+    "wikipedia": "https://www.wikipedia.org",
+    "hotstar": "https://www.hotstar.com",
+    "prime video": "https://www.primevideo.com",
+    "zoom": "https://zoom.us",
+    "teams web": "https://teams.microsoft.com",
+}
+
 _APP_ALIASES = {
     "chrome": "chrome", "google chrome": "chrome",
     "edge": "msedge", "microsoft edge": "msedge",
@@ -54,6 +84,15 @@ _UNIT_SECONDS = {
     "minute": 60, "minutes": 60, "min": 60, "mins": 60,
     "hour": 3600, "hours": 3600, "hr": 3600, "hrs": 3600,
 }
+
+
+def _extract_site(text: str) -> Optional[str]:
+    """Map a spoken site name ("youtube") to a full URL."""
+    lowered = (text or "").lower().strip()
+    for name in sorted(_SITE_URLS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(name)}\b", lowered):
+            return _SITE_URLS[name]
+    return None
 
 
 class IntentRouter:
@@ -229,10 +268,17 @@ class IntentRouter:
             if re.search(r"\b(folder|directory)\b", target_text):
                 return Intent(name="open_folder", tool="open_path",
                               arguments={"path": target_text}, confidence=0.6)
-            # "open <url or search>" -> browser search
-            if re.search(r"\.(com|org|net|io|dev|ai|co\.uk)\b", target_text):
+            # "open youtube" / "open <url>" -> open in the browser
+            site = _extract_site(target_text)
+            if site:
                 return Intent(name="open_url", tool="open_url",
-                              arguments={"url": target_text}, confidence=0.85)
+                              arguments={"url": site}, confidence=0.9,
+                              speak="Opening that in your browser, sir.")
+            if re.search(r"\.(com|org|net|io|dev|ai|co\.uk)\b", target_text):
+                url = target_text if "://" in target_text else "https://" + target_text
+                return Intent(name="open_url", tool="open_url",
+                              arguments={"url": url}, confidence=0.85,
+                              speak="Opening that in your browser, sir.")
             return Intent(name="open_unknown", requires_ai=True, confidence=0.4,
                           notes=target_text)
 

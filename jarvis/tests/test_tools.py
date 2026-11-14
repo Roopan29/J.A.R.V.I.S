@@ -214,3 +214,57 @@ def test_spoken_browser_names_resolve_to_aliases():
     assert _resolve_alias("Microsoft Edge") == "msedge"
     assert _resolve_alias("ms edge") == "msedge"
     assert _resolve_alias("windows terminal") == "wt"
+
+
+# -- spoken site names ------------------------------------------------------
+# "open youtube" used to route to the language model (no model -> no reply).
+
+
+def test_open_spoken_site_opens_url():
+    from jarvis.core.intent_router import IntentRouter
+
+    router = IntentRouter()
+    for phrase, expected in [
+        ("open youtube", "https://www.youtube.com"),
+        ("open YouTube", "https://www.youtube.com"),
+        ("open google", "https://www.google.com"),
+        ("open gmail", "https://mail.google.com"),
+        ("open github", "https://github.com"),
+        ("open reddit", "https://www.reddit.com"),
+    ]:
+        intent = router.route(phrase)
+        assert intent.tool == "open_url", f"{phrase} -> {intent.name}"
+        assert intent.arguments["url"] == expected
+
+
+def test_open_site_does_not_shadow_apps_or_folders():
+    from jarvis.core.intent_router import IntentRouter
+
+    router = IntentRouter()
+    assert router.route("open notepad").tool == "open_application"
+    assert router.route("open chrome").tool == "open_application"
+    assert router.route("open my documents folder").tool == "open_path"
+
+
+def test_open_url_rejects_non_web_schemes():
+    import pytest
+
+    from jarvis.computer import app_control
+
+    for bad in ["javascript:alert(1)", "file:///C:/Windows/System32", ""]:
+        with pytest.raises((ValueError, app_control.AppControlError)):
+            app_control.open_url(bad)
+
+
+def test_open_url_preserves_query_string(monkeypatch):
+    """'&' in a YouTube query must not be truncated by a shell."""
+    from jarvis.computer import app_control, platform_support
+
+    launched = {}
+    monkeypatch.setattr(platform_support.support, "is_windows", True)
+    monkeypatch.setattr(app_control.os, "startfile",
+                        lambda target: launched.setdefault("target", target), raising=False)
+
+    result = app_control.open_url("youtube.com/results?search_query=cats&sp=EgIQAQ")
+    assert result["ok"] is True
+    assert launched["target"] == "https://youtube.com/results?search_query=cats&sp=EgIQAQ"

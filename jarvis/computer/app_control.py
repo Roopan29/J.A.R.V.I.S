@@ -362,17 +362,36 @@ def open_path(path: str) -> Dict[str, Any]:
 
 
 def open_url(url: str, browser: Optional[str] = None) -> Dict[str, Any]:
-    if not url.startswith(("http://", "https://")):
+    """Open a URL in the default browser.
+
+    ``os.startfile`` is used on Windows rather than
+    ``cmd /c start`` so that query strings containing ``&`` (very common in
+    search results and YouTube links) are not truncated by the shell.
+    """
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("No URL supplied")
+    if "://" not in url:
         url = "https://" + url
-    if support.is_windows:
-        subprocess.Popen(["cmd", "/c", "start", "", url],
-                         creationflags=CREATE_NO_WINDOW, close_fds=True)
-    elif support.is_macos:
-        subprocess.Popen(["open", url])
-    else:
-        subprocess.Popen(["xdg-open", url])
-    return {"ok": True, "verified": True, "message": f"Opened {url} in the browser.",
-            "data": {"url": url}}
+    scheme = url.split("://", 1)[0].lower()
+    if scheme not in {"http", "https"}:
+        raise ValueError(f"Refusing to open non-web URL scheme: {scheme}")
+
+    try:
+        if support.is_windows:
+            os.startfile(url)  # type: ignore[attr-defined]
+        elif support.is_macos:
+            subprocess.Popen(["open", url])
+        else:
+            subprocess.Popen(["xdg-open", url], close_fds=True)
+    except FileNotFoundError as exc:
+        raise AppControlError(
+            "No browser handler is available to open links on this system.") from exc
+    except OSError as exc:
+        raise AppControlError(f"Could not open the browser: {exc}") from exc
+
+    return {"ok": True, "verified": True,
+            "message": f"Opened {url} in your browser.", "data": {"url": url}}
 
 
 def close_application(name: str, force: bool = False) -> Dict[str, Any]:
