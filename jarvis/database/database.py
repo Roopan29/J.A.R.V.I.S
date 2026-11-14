@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -125,6 +126,35 @@ CREATE TABLE IF NOT EXISTS clipboard_history (
 """
 
 
+# Columns added after the first release. Older databases are missing these
+# even though CREATE TABLE IF NOT EXISTS leaves the stale table alone.
+REQUIRED_COLUMNS: Dict[str, Dict[str, str]] = {
+    "reminders": {"done": "INTEGER DEFAULT 0", "repeat": "TEXT DEFAULT 'none'"},
+    "todos": {"done": "INTEGER DEFAULT 0", "priority": "INTEGER DEFAULT 0",
+              "due_at": "TEXT DEFAULT ''"},
+    "tasks": {"kind": "TEXT DEFAULT 'tool'", "payload": "TEXT DEFAULT ''",
+              "status": "TEXT DEFAULT 'queued'", "progress": "REAL DEFAULT 0",
+              "detail": "TEXT DEFAULT ''", "attempts": "INTEGER DEFAULT 0"},
+}
+
+
+def _split_statements(script: str) -> List[str]:
+    """Split a SQL script into statements, ignoring blank lines and comments."""
+    statements: List[str] = []
+    buffer: List[str] = []
+    for line in script.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+        buffer.append(line)
+        if stripped.endswith(";"):
+            statements.append("\n".join(buffer).strip())
+            buffer = []
+    if buffer:
+        statements.append("\n".join(buffer).strip())
+    return [stmt.rstrip(";") for stmt in statements if stmt.rstrip(";").strip()]
+
+
 def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -149,11 +179,81 @@ class Database:
         return conn
 
     def init_schema(self) -> None:
+        """Create or repair the schema.
+
+        ``CREATE TABLE IF NOT EXISTS`` silently keeps an *older* table shape, so
+        a database written by a previous version can be missing columns that the
+        indexes and queries below require. Applying statements one at a time and
+        adding any missing column keeps start-up working instead of crashing.
+        """
         with self._init_lock:
             conn = self.connect()
-            conn.executescript(SCHEMA)
+            self._reconcile_columns(conn)
+            for statement in _split_statements(SCHEMA):
+                # A single index/table statement can need more than one added
+                # column, so retry until it succeeds or nothing is repaired.
+                for _ in range(8):
+                    try:
+                        conn.execute(statement)
+                        break
+                    except sqlite3.OperationalError as exc:
+                        if not self._repair(conn, statement, exc):
+                            raise
             conn.commit()
         log.info("Database ready at %s", self.path)
+
+    def _reconcile_columns(self, conn: sqlite3.Connection) -> None:
+        """Add every known-required column that an older database lacks."""
+        for table, columns in REQUIRED_COLUMNS.items():
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if not existing:
+                continue  # table does not exist yet; SCHEMA will create it
+            for column, decl in columns.items():
+                if column not in existing:
+                    log.warning("Migrating database: adding %s.%s", table, column)
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        conn.commit()
+
+    # -- schema repair -----------------------------------------------------
+    def _repair(self, conn: sqlite3.Connection, statement: str,
+                exc: sqlite3.OperationalError) -> bool:
+        """Add missing columns, then retry the failed statement.
+
+        Returns True when the statement is worth retrying.
+        """
+        message = str(exc).lower()
+        if "no such column" not in message:
+            return False
+        missing = message.split("no such column:", 1)[1].strip()
+        # Work out which table the failing statement belongs to.
+        table = ""
+        match = re.search(r"\bon\s+([a-z_][a-z0-9_]*)", statement, re.I)
+        if match:
+            table = match.group(1)
+        else:
+            match = re.search(r"CREATE TABLE IF NOT EXISTS\s+([a-z_][a-z0-9_]*)", statement, re.I)
+            if match:
+                table = match.group(1)
+        if not table and "done" in missing:
+            table = "reminders"
+        if not table:
+            return False
+        return self._ensure_column(conn, table, missing)
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str) -> bool:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            return False
+        if column in existing:
+            return True
+        # Every column we look up here has a harmless default.
+        defaults = {"done": "INTEGER DEFAULT 0", "priority": "INTEGER DEFAULT 0",
+                    "due_at": "TEXT DEFAULT ''", "repeat": "TEXT DEFAULT 'none'"}
+        decl = defaults.get(column, "TEXT DEFAULT ''")
+        log.warning("Migrating database: adding %s.%s", table, column)
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        conn.commit()
+        return True
 
     def close(self) -> None:
         conn = getattr(self._local, "conn", None)
