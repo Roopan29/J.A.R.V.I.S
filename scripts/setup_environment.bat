@@ -46,9 +46,13 @@ if %MINOR% LSS 9 (
     pause
     exit /b 1
 )
-if %MINOR% GEQ 13 (
-    echo [WARN] Python 3.%MINOR% detected. Some audio packages may lag behind;
-    echo         Python 3.11 or 3.12 is the most reliable choice.
+if %MINOR% GEQ 14 (
+    echo [WARN] Python 3.%MINOR% is very new. Most packages install fine, but if
+    echo        voice/mouse libraries fail you can install Python 3.12 alongside
+    echo        and point .venv at it by deleting the folder and re-running this.
+) else if %MINOR% GEQ 13 (
+    echo [WARN] Python 3.%MINOR% detected. Core features work; a few optional
+    echo        audio packages may lag behind. Python 3.11/3.12 is safest.
 )
 
 REM ------------------------------------------------------- virtual environment

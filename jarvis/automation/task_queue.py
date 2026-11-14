@@ -82,8 +82,19 @@ class TaskQueue:
 
     # -- lifecycle --------------------------------------------------------
     def ensure_worker(self) -> None:
-        if self._worker is None or self._worker.done():
-            self._worker = asyncio.get_event_loop().create_task(self._run_worker())
+        """Start the worker on the running loop.
+
+        ``asyncio.get_event_loop()`` is deprecated and raises when no loop is
+        running on Python 3.14, so require a running loop explicitly.
+        """
+        if self._worker is not None and not self._worker.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            log.debug("Task queue worker deferred: no running event loop")
+            return
+        self._worker = loop.create_task(self._run_worker())
 
     async def _run_worker(self) -> None:
         while True:

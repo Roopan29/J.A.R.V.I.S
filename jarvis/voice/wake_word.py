@@ -48,7 +48,9 @@ class WakeWordDetector:
             log.info(self.detail)
             return
 
-        model_key = self.phrase.replace(" ", "_")
+        # openWakeWord keys its bundled models without a version suffix
+        # ("hey_jarvis", "alexa", ...); download_models() needs the same key.
+        model_key = self.phrase.replace(" ", "_").removesuffix("_v0.1")
         if "jarvis" not in self.phrase:
             self.detail = (f"openWakeWord has no pretrained model for '{self.phrase}'. "
                            "The bundled models cover 'hey jarvis', 'alexa', 'hey mycroft', "
@@ -56,12 +58,17 @@ class WakeWordDetector:
             log.warning(self.detail)
         try:
             # Ensure the pretrained models are downloaded once.
+            known = set(getattr(openwakeword, "MODELS", {}).keys())
+            if known and model_key not in known:
+                self.detail = (f"openWakeWord has no bundled model '{model_key}'. "
+                               f"Available: {', '.join(sorted(known))}.")
+                log.warning(self.detail)
+                return
             try:
-                openwakeword.utils.download_models(model_names=["hey_jarvis_v0.1.onnx"])
-            except Exception as exc:  # offline is fine if cached
-                log.debug("Wake-word model download skipped: %s", exc)
-            self._model = Model(wakeword_models=[f"{model_key}_v0.1"],
-                                inference_framework="onnx")
+                openwakeword.utils.download_models(model_names=[model_key])
+            except Exception as exc:  # first-run download needs internet
+                log.info("Wake-word model download skipped (%s); will retry on use.", exc)
+            self._model = Model(wakeword_models=[model_key], inference_framework="onnx")
             self.available = True
             self.detail = f"Wake word '{self.phrase}' ready."
             log.info(self.detail)

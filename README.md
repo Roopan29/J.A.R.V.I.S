@@ -35,7 +35,7 @@ The dashboard opens at **http://127.0.0.1:8712/**.
 
 | Script | Purpose |
 |---|---|
-| `scripts\setup_environment.bat` | Verifies Python 3.10–3.12, creates `.venv`, copies `.env.example` → `.env`, reports audio devices |
+| `scripts\setup_environment.bat` | Verifies Python 3.10–3.14 (3.11/3.12 recommended), creates `.venv`, copies `.env.example` → `.env`, reports audio devices |
 | `scripts\install.bat` | Installs `requirements.txt`, runs a self-test, offers to pull an Ollama model and a Piper voice |
 | `scripts\start_jarvis.bat` | Starts backend + dashboard. Flags: `--minimised`, `--headless`, `--diagnose`, `--voice-test` |
 | `scripts\run_tests.bat` | Runs the automated test suite |
@@ -344,6 +344,14 @@ without validation.
 
 **`start_jarvis.bat` says Python was not found**
 Install Python 3.11 or 3.12 from python.org and tick "Add python.exe to PATH".
+
+**Install fails on Python 3.13 / 3.14**
+Core features work there, but some optional packages (older `piper-tts`,
+`pyautogui` builds, `uvloop`) have no wheels. `install.bat` now installs the core
+stack first and skips optional extras with a warning, so JARVIS still runs with
+voice output via SAPI5 and mouse/keyboard automation disabled. For the full
+feature set, install Python 3.12 (you can keep 3.14 too — just delete `.venv`
+and re-run `setup_environment.bat` with 3.12 on PATH first).
 
 **Port 8712 already in use**
 Another instance is running (the launcher detects this and just opens the dashboard).

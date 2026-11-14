@@ -22,20 +22,62 @@ if not exist ".venv\Scripts\python.exe" (
 set "VPY=.venv\Scripts\python.exe"
 
 echo [..] Upgrading pip ...
-%VPY% -m pip install --upgrade pip --quiet
+%VPY% -m pip install --upgrade pip setuptools wheel --quiet
 
-echo [..] Installing dependencies from requirements.txt (this can take several minutes) ...
-%VPY% -m pip install -r requirements.txt
+REM ---------------------------------------------------------------- core stack
+REM These MUST install: the dashboard, system control and the API need them.
+echo.
+echo [..] Installing core packages ...
+%VPY% -m pip install "fastapi>=0.110,<1.0" uvicorn websockets httptools watchfiles ^
+    colorama python-multipart python-dotenv psutil httpx numpy
 if errorlevel 1 (
     echo.
-    echo [WARN] Some packages failed. Core functionality may still work.
-    echo        Common causes:
-    echo          - missing C++ build tools  (https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-    echo          - no internet connection
-    echo        Retrying without the heavy optional audio extras ...
-    %VPY% -m pip install fastapi "uvicorn[standard]" psutil httpx python-dotenv ^
-        sounddevice numpy pyautogui pyperclip mss Pillow beautifulsoup4 lxml send2trash
+    echo [ERROR] Core installation failed. Most likely causes:
+    echo         - no internet connection
+    echo         - a Python version newer than the packages support
+    echo         Python 3.11 or 3.12 is the most reliable choice.
+    pause
+    exit /b 1
 )
+echo [OK] Core packages installed.
+
+REM ------------------------------------------------------------ web / filesystem
+echo [..] Installing web, file and automation packages ...
+%VPY% -m pip install beautifulsoup4 lxml send2trash pyperclip mss Pillow pytesseract
+if errorlevel 1 echo [WARN] Some web/file packages failed - related tools will report why.
+
+REM ------------------------------------------------------------- voice (input)
+echo.
+echo [..] Installing voice input packages ...
+%VPY% -m pip install sounddevice soundfile scipy faster-whisper
+if errorlevel 1 (
+    echo [WARN] Speech recognition packages failed to install.
+    echo        JARVIS will run, but voice input will be unavailable.
+    echo        Fix: install Python 3.11 or 3.12 and re-run scripts\install.bat
+)
+%VPY% -m pip install openwakeword --no-deps
+if errorlevel 1 echo [WARN] openWakeWord unavailable - push-to-talk still works.
+%VPY% -m pip install webrtcvad-wheels
+if errorlevel 1 echo [INFO] webrtcvad not available - using the built-in energy VAD.
+
+REM ------------------------------------------------------------ voice (output)
+echo [..] Installing speech output packages ...
+%VPY% -m pip install pyttsx3
+if errorlevel 1 echo [WARN] pyttsx3 unavailable - no SAPI5 fallback voice.
+%VPY% -m pip install piper-tts
+if errorlevel 1 echo [INFO] Piper unavailable - SAPI5 will be used instead.
+
+REM ------------------------------------------------------- Windows integration
+echo [..] Installing Windows control packages ...
+%VPY% -m pip install pywin32 pycaw comtypes
+if errorlevel 1 echo [WARN] Some Windows packages failed - see the README troubleshooting section.
+REM pyautogui ships no wheels, so it is installed separately from source.
+%VPY% -m pip install pyautogui pygetwindow
+if errorlevel 1 echo [WARN] pyautogui unavailable - mouse/keyboard automation will be disabled.
+
+REM ------------------------------------------------------------ search (optional)
+%VPY% -m pip install ddgs --quiet
+if errorlevel 1 echo [INFO] ddgs unavailable - the keyless DuckDuckGo scraper will be used.
 
 echo.
 echo [..] Verifying installation ...

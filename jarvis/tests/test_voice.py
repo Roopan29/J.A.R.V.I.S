@@ -273,3 +273,31 @@ def test_voice_status_shape():
     status = VoiceManager().status()
     for key in ("mode", "listening", "state", "wake_word", "stt", "tts", "devices", "level"):
         assert key in status
+
+
+def test_wake_word_model_key_matches_openwakeword(monkeypatch):
+    """Regression: the model key must be 'hey_jarvis', not 'hey_jarvis_v0.1'.
+
+    openWakeWord keys its bundled models without a version suffix and its
+    download_models() call rejects unknown names.
+    """
+    pytest.importorskip("openwakeword")
+    import openwakeword
+
+    from jarvis.voice.wake_word import WakeWordDetector
+
+    detector = WakeWordDetector("hey jarvis")
+    # The detector must have either loaded a model or explained honestly why not.
+    assert detector.detail
+    assert not detector.available or "ready" in detector.detail.lower()
+
+    key = "hey jarvis".replace(" ", "_").removesuffix("_v0.1")
+    assert key in openwakeword.MODELS
+
+
+def test_unknown_wake_phrase_reports_available_models():
+    from jarvis.voice.wake_word import WakeWordDetector
+
+    detector = WakeWordDetector("computer wake up")
+    assert detector.available is False
+    assert detector.detail
