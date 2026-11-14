@@ -85,6 +85,10 @@ class VoiceManager:
         if mode in ("wake", "continuous") and settings.wake_word_enabled:
             if self.detector is None:
                 self.detector = WakeWordDetector(settings.wake_word_model)
+            elif not self.detector.available:
+                # First-run model download may have failed; retry on demand
+                # instead of leaving the wake word permanently unavailable.
+                self.detector.retry_load()
         if mode == "wake" and (self.detector is None or not self.detector.available):
             bus.notify("Wake word unavailable",
                        (self.detector.detail if self.detector else "openWakeWord missing")

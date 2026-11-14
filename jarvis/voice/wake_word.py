@@ -73,7 +73,15 @@ class WakeWordDetector:
             self.detail = f"Wake word '{self.phrase}' ready."
             log.info(self.detail)
         except Exception as exc:
-            self.detail = f"Could not initialise openWakeWord: {exc}"
+            text = str(exc)
+            if "NO_SUCHFILE" in text or "File doesn't exist" in text:
+                self.detail = (
+                    "Wake word model is not downloaded yet. It fetches ~2 MB on "
+                    "first use — check your internet connection, then press "
+                    "WAKE WORD again. Push-to-talk works without it."
+                )
+            else:
+                self.detail = f"Could not initialise openWakeWord: {text}"
             log.warning(self.detail)
             self._model = None
 
@@ -101,6 +109,16 @@ class WakeWordDetector:
             log.info("Wake word detected (%s, score %.2f)", best_name, best_score)
         return {"detected": detected, "scores": {k: round(float(v), 3) for k, v in scores.items()},
                 "best": best_name, "score": round(best_score, 3), "available": True}
+
+    def retry_load(self) -> bool:
+        """Try loading models again (e.g. after the first-run download failed)."""
+        if self.available:
+            return True
+        self._model = None
+        self.available = False
+        self.detail = ""
+        self._load()
+        return self.available
 
     def reset(self) -> None:
         if self._model is not None and hasattr(self._model, "reset"):

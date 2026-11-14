@@ -180,8 +180,27 @@
     alert: ["ALERT", "attention required"],
   };
 
+  // If a command is dispatched but no reply ever arrives (provider hang, tool
+  // stuck awaiting confirmation, dropped socket), the ring would sit on
+  // PROCESSING forever. Recover to idle and tell the user what to do.
+  const BUSY_STATES = ["thinking", "executing"];
+  const STATE_WATCHDOG_MS = 45000;
+  let stateTimer = null;
+
+  function armStateWatchdog(state) {
+    if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
+    if (!BUSY_STATES.includes(state)) return;
+    stateTimer = setTimeout(() => {
+      if (!BUSY_STATES.includes(App.state)) return;
+      setState("idle");
+      addLog({ message: "No reply arrived in time — reset to standby.", level: "warning" });
+      toast("No reply", "JARVIS did not answer in time. Check that Ollama is running, then try again.", "warning");
+    }, STATE_WATCHDOG_MS);
+  }
+
   function setState(state) {
     App.state = state;
+    armStateWatchdog(state);
     const wrap = $("#coreWrap");
     if (wrap) {
       wrap.dataset.state = state === "wake_listening" ? "listening" : state;
@@ -402,6 +421,17 @@
     });
     socket.on("metrics", updateMetrics);
     socket.on("log", addLog);
+    // Replayed history (sent on connect) fills the activity log once. Live
+    // events then append; nothing is rendered twice.
+    socket.on("replay", (events) => {
+      const list = $("#logList");
+      if (list) list.innerHTML = "";
+      (events || [])
+        .filter((evt) => evt && evt.type === "log")
+        .slice(-40)
+        .forEach((evt) => addLog(evt.data || {}));
+      App.emit("replay", events || []);
+    });
     socket.on("notification", (data) => {
       addNotification(data);
       toast(data.title || "Notification", data.message || "", data.level || "info");

@@ -45,8 +45,16 @@
       this.ws = null;
       this.retry = 0;
       this.connected = false;
+      this.reconnectTimer = null;
     }
     connect() {
+      // Guard: a reconnect timer plus a manual connect used to open a second
+      // socket, so every event was received (and logged) twice.
+      if (this.ws && (this.ws.readyState === WebSocket.OPEN ||
+                      this.ws.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
+      if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const url = `${proto}//${location.host}/ws`;
       try { this.ws = new WebSocket(url); } catch (e) { this.scheduleReconnect(); return; }
@@ -69,15 +77,22 @@
         const data = message.data !== undefined ? message.data : message;
         if (type === "hello") {
           this.emit("hello", data);
-          (data.history || []).forEach((evt) => this.emit(evt.type, evt.data, evt));
+          // History is the last 40 events, sent so a freshly opened tab is not
+          // blank. Replaying it through the live handlers duplicated every log
+          // line that was already on screen, so it is delivered separately.
+          this.emit("replay", data.history || []);
           return;
         }
         this.emit(type, data, message);
       };
     }
     scheduleReconnect() {
+      if (this.reconnectTimer) return;
       this.retry = Math.min(this.retry + 1, 8);
-      setTimeout(() => this.connect(), 400 * this.retry);
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connect();
+      }, 400 * this.retry);
     }
     emit(type, data, raw) {
       (listeners.get(type) || []).forEach((fn) => {

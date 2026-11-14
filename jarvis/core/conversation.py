@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import inspect
 import logging
 import platform
 import re
@@ -200,8 +201,18 @@ class ConversationEngine:
 
         bus.publish(EventType.RESPONSE, reply.to_dict())
         if speak and self._speaker and reply.text:
+            # Speech is blocking (SAPI5 runAndWait / Piper playback). Running it
+            # inline would freeze the event loop, so the WebSocket cannot deliver
+            # the reply and the dashboard ring sits on PROCESSING while JARVIS
+            # talks. Offload to a worker thread and return the reply immediately.
             try:
-                await self._speaker(reply.text)
+                speaker = self._speaker
+                if inspect.iscoroutinefunction(speaker):
+                    await speaker(reply.text)
+                else:
+                    # Blocking engine (SAPI5/pyttsx3/Piper): keep it off the loop.
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, speaker, reply.text)
                 reply.spoken = True
             except Exception:
                 log.exception("Speech output failed")

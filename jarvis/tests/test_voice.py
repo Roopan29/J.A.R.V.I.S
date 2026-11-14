@@ -301,3 +301,33 @@ def test_unknown_wake_phrase_reports_available_models():
     detector = WakeWordDetector("computer wake up")
     assert detector.available is False
     assert detector.detail
+
+
+def test_wake_word_missing_model_gives_download_hint():
+    """A missing model file must not be reported as a missing package.
+
+    Reported in the field: the dashboard said "Wake word needs the
+    openwakeword package (pip install openwakeword)" even though it was
+    installed - the actual problem was the undownloaded model.
+    """
+    from jarvis.voice.wake_word import WakeWordDetector
+
+    detector = WakeWordDetector("hey jarvis")
+    if detector.available:
+        pytest.skip("models are present in this environment")
+    detail = detector.detail.lower()
+    assert "pip install openwakeword" not in detail
+    assert "model" in detail
+    assert "push-to-talk" in detail or "download" in detail
+
+
+def test_wake_word_retry_load_is_safe():
+    from jarvis.voice.wake_word import WakeWordDetector
+
+    detector = WakeWordDetector("hey jarvis")
+    result = detector.retry_load()
+    assert isinstance(result, bool)
+    if detector.available:
+        assert result is True
+    else:
+        assert detector.detail
