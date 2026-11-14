@@ -14,11 +14,28 @@ echo ============================================================
 echo.
 
 REM ---------------------------------------------------------------- Python
+REM Prefer a Python that every dependency supports. The py launcher is asked
+REM for 3.12 and 3.11 first, then newer versions, before falling back to
+REM whatever "python" resolves to on PATH.
 set "PYTHON="
-for %%P in (python py python3) do (
-    if not defined PYTHON (
-        %%P --version >nul 2>&1
-        if !errorlevel! equ 0 set "PYTHON=%%P"
+if not defined JARVIS_PYTHON (
+    for %%V in (3.12 3.11 3.13 3.14 3.10) do (
+        if not defined PYTHON (
+            py -%%V --version >nul 2>&1
+            if !errorlevel! equ 0 set "PYTHON=py -%%V"
+        )
+    )
+)
+if defined JARVIS_PYTHON (
+    %JARVIS_PYTHON% --version >nul 2>&1
+    if !errorlevel! equ 0 set "PYTHON=%JARVIS_PYTHON%"
+)
+if not defined PYTHON (
+    for %%P in (python py python3) do (
+        if not defined PYTHON (
+            %%P --version >nul 2>&1
+            if !errorlevel! equ 0 set "PYTHON=%%P"
+        )
     )
 )
 if not defined PYTHON (
